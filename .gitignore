@@ -1,0 +1,6 @@
+.*.swp
+*.cmxi
+*.cmx
+*.cmi
+*.o
+jssi
