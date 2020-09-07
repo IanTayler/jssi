@@ -134,17 +134,18 @@ let rec last_val var state =
 
 let assign var value state = State.add var value state
 
-(*
- let op_func str =
-  match str with
-    "+" -> (fun left_node right_node state -> (interpret left_node).[0] ^ (interpret right_node).[0])
-  | "++" -> (fun left_node right_node state ->
-      (next_val (interpret left_node).[0] state) ^ (next_val (interpret right_node).[0] state))
-*)
   (* TODO *)
 
 exception Interpret_CLP_snd_error
 exception Interpret_no_match
+exception Interpret_no_op
+
+let op_func str =
+  match str with
+    "+" -> (fun left_value right_value state -> left_value ^ right_value)
+  | "++" -> (fun left_value right_value state ->
+      (next_val left_value state) ^ (next_val right_value state))
+  | _ -> raise Interpret_no_op
 
 let rec interpret ast state =
   match ast with
@@ -157,5 +158,11 @@ let rec interpret ast state =
         (last_val fst_value_str state, state)
       else
         raise Interpret_CLP_snd_error
-  | Node {cls=CLEL; children=(child_fst :: Leaf {cls=CLOP; value=snd_value} :: [])} -> ("none", state) (* TODO *)
+  | Node {cls=CLEL; children=(child_fst :: Leaf {cls=CLOP; value=snd_value} :: [])} ->
+      interpret child_fst state
+  | Node {cls=CLE; children=((Node child_fst) :: child_snd :: [])} ->
+      let child_fst_value, new_state_fst = interpret (Node child_fst) state in
+      let _ :: Leaf {cls=CLOP; value=op_value} :: [] = child_fst.children in
+      let child_snd_value, new_state_snd = interpret child_snd new_state_fst in
+      ((op_func op_value.str) child_fst_value child_snd_value new_state_snd, new_state_snd)
   | _ -> raise Interpret_no_match
