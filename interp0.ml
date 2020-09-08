@@ -10,7 +10,7 @@ let string_to_token str =
     "=" -> TTAssign
   | "(" -> TTOpenParen
   | ")" -> TTCloseParen
-  | "==" -> TTBinaryOp
+  | "==" -> TTAssign
   | "===" -> TTBinaryOp
   | "+" -> TTBinaryOp
   | "++" -> TTBinaryOp
@@ -61,42 +61,70 @@ exception Stack_error
 
 let forward_step stack_top position current_token =
   match current_token with
-    {cls=TTString} ->
-      let leaf_value = Leaf {value=current_token; cls=CLP; position=position} in
-      if (node_cls stack_top) = CLEL then
-        (PopPush (Node {cls=CLE; children=[stack_top; leaf_value]}), Consume)
-      else
-        (Push leaf_value, Consume)
-  | {cls=TTUnaryOp} ->
-      if node_cls stack_top = CLP then
-        let leaf_value = Leaf {value=current_token; cls=CLUP; position=position} in
-        (PopPush (Node {cls=CLP; children=[stack_top; leaf_value]}), Consume)
-      else
-        raise Stack_error
-  | {cls=TTBinaryOp} ->
+    {cls=TTBinaryOp} ->
       if List.mem (node_cls stack_top) [CLE; CLP] then
         let leaf_value = Leaf {value=current_token; cls=CLOP; position=position} in
         (PopPush (Node {cls=CLEL; children=[stack_top; leaf_value]}), Consume)
       else
         raise Stack_error
-  | {cls=TTAssign} ->
+  | {cls=TTUnaryOp} ->
       if List.mem (node_cls stack_top) [CLE; CLP] then
-        (PopPush (Node {cls=CLAL; children=[stack_top]}), Consume)
+        let leaf_value = Leaf {value=current_token; cls=CLUP; position=position} in
+        (PopPush (Node {cls=CLP; children=[stack_top; leaf_value]}), Consume)
+      else
+        raise Stack_error
+  | {cls=TTAssign} ->
+      let leaf_value = Leaf {value=current_token; cls=CLOP; position=position} in
+      if List.mem (node_cls stack_top) [CLE; CLP] then
+        (PopPush (Node {cls=CLAL; children=[stack_top; leaf_value]}), Consume)
       else
         raise Stack_error
   | _ -> raise Token_error
+
+exception P_expr_error_string
+exception P_expr_error_none
+
+let rec _form_p_expr tokens position acc =
+  match tokens with
+    [] -> (acc, tokens, position)
+  | token_hd :: tokens_tl ->
+      match acc with
+        None ->
+          _form_p_expr tokens_tl (position + 1) (Some (Leaf {cls=CLP; value=token_hd; position=position}))
+      | Some node ->
+          if token_hd.cls = TTUnaryOp then
+            let leaf_value = Leaf {value=token_hd; cls=CLUP; position=position} in
+            _form_p_expr tokens_tl (position + 1) (Some (Node {cls=CLP; children=[node; leaf_value]}))
+          else if token_hd.cls = TTString then
+            raise P_expr_error_string
+          else
+            (acc, tokens, position)
+
+let form_p_expr tokens position =
+  let opt_node, new_tokens, new_position = _form_p_expr tokens position None in
+  match opt_node with
+    None -> raise P_expr_error_none
+  | Some node -> (node, new_tokens, new_position)
 
 let rec _forward_pass tokens stack position =
   match tokens with
     [] -> stack
   | tokens_hd :: tokens_tl ->
-      let stack_action, token_action = forward_step (List.hd stack) position tokens_hd in
-      let new_tokens = if token_action = Consume then tokens_tl else tokens in
-      let new_position = if token_action = Consume then position + 1 else position in
-      match stack_action with
-        PopPush node -> _forward_pass new_tokens (node :: (List.tl stack)) new_position
-      | Push node -> _forward_pass new_tokens (node :: stack) new_position
-      | _ -> raise Stack_error
+      if tokens_hd.cls = TTString then
+        let p_expr, new_tokens, new_position = form_p_expr tokens position in
+        let stack_hd :: stack_tl = stack in
+        if node_cls stack_hd = CLEL then
+          _forward_pass new_tokens ((Node {cls=CLE; children=[stack_hd; p_expr]}) :: stack_tl) new_position
+        else
+          _forward_pass new_tokens (p_expr :: stack) new_position
+      else
+        let stack_action, token_action = forward_step (List.hd stack) position tokens_hd in
+        let new_tokens = if token_action = Consume then tokens_tl else tokens in
+        let new_position = if token_action = Consume then position + 1 else position in
+        match stack_action with
+          PopPush node -> _forward_pass new_tokens (node :: (List.tl stack)) new_position
+        | Push node -> _forward_pass new_tokens (node :: stack) new_position
+        | _ -> raise Stack_error
 
 let forward_pass tokens = _forward_pass tokens [empty_ast] 1
 
@@ -134,9 +162,10 @@ let rec last_val var state =
 
 let assign var value state = State.add var value state
 
-  (* TODO *)
-
 exception Interpret_CLP_snd_error
+exception Interpret_CLE_children_error
+exception Interpret_CLA_children_error
+exception Interpret_CLA_op_error
 exception Interpret_no_match
 exception Interpret_no_op
 
@@ -158,11 +187,54 @@ let rec interpret ast state =
         (last_val fst_value_str state, state)
       else
         raise Interpret_CLP_snd_error
+  | Node {cls=CLAL; children=(child_fst :: Leaf {cls=CLOP; value=snd_value} :: [])} ->
+      interpret child_fst state
+  | Node {cls=CLA; children=((Node child_fst) :: child_snd :: [])} ->
+      let child_fst_value, new_state_fst = interpret (Node child_fst) state in
+      let child_snd_value, new_state_snd = interpret child_snd new_state_fst in
+      begin
+        match child_fst.children with
+          _ :: Leaf {cls=CLOP; value=op_value} :: [] ->
+            if op_value.str = "=" then
+              ("()", assign child_fst_value child_snd_value new_state_snd)
+            else if op_value.str = "==" then
+              ("()", assign
+                (next_val child_fst_value new_state_snd)
+                (next_val child_snd_value new_state_snd)
+                new_state_snd
+              )
+            else raise Interpret_CLA_op_error
+        | _ -> raise Interpret_CLA_children_error
+      end
   | Node {cls=CLEL; children=(child_fst :: Leaf {cls=CLOP; value=snd_value} :: [])} ->
       interpret child_fst state
   | Node {cls=CLE; children=((Node child_fst) :: child_snd :: [])} ->
       let child_fst_value, new_state_fst = interpret (Node child_fst) state in
-      let _ :: Leaf {cls=CLOP; value=op_value} :: [] = child_fst.children in
       let child_snd_value, new_state_snd = interpret child_snd new_state_fst in
-      ((op_func op_value.str) child_fst_value child_snd_value new_state_snd, new_state_snd)
+      begin
+        match child_fst.children with
+          _ :: Leaf {cls=CLOP; value=op_value} :: [] ->
+            ((op_func op_value.str) child_fst_value child_snd_value new_state_snd, new_state_snd)
+        | _ -> raise Interpret_CLE_children_error
+      end
   | _ -> raise Interpret_no_match
+
+(* Main loop *)
+
+let rec loop state =
+  print_string ">> ";
+  let out, new_state = interpret (parse (read_line ())) state in
+  if out <> "()" then
+    begin
+      print_string out;
+      print_string "\n";
+    end
+  else
+    print_string "\n";
+  loop new_state
+
+let () =
+  try
+    loop State.empty
+  with
+    End_of_file -> print_string "\n";;
