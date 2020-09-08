@@ -199,7 +199,7 @@ let rec interpret ast state =
               ("()", assign child_fst_value child_snd_value new_state_snd)
             else if op_value.str = "==" then
               ("()", assign
-                (next_val child_fst_value new_state_snd)
+                (last_val child_fst_value new_state_snd)
                 child_snd_value
                 new_state_snd
               )
