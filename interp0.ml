@@ -200,7 +200,7 @@ let rec interpret ast state =
             else if op_value.str = "==" then
               ("()", assign
                 (next_val child_fst_value new_state_snd)
-                (next_val child_snd_value new_state_snd)
+                child_snd_value
                 new_state_snd
               )
             else raise Interpret_CLA_op_error
