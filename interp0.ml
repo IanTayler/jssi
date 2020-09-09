@@ -12,6 +12,8 @@ let string_to_token str =
   | ")" -> TTCloseParen
   | "==" -> TTAssign
   | "===" -> TTBinaryOp
+  | "====" -> TTBinaryOp
+  | "=====" -> TTBinaryOp
   | "+" -> TTBinaryOp
   | "++" -> TTBinaryOp
   | "*" -> TTUnaryOp
@@ -174,6 +176,14 @@ let op_func str =
     "+" -> (fun left_value right_value state -> left_value ^ right_value)
   | "++" -> (fun left_value right_value state ->
       (next_val left_value state) ^ (next_val right_value state))
+  | "+++" -> (fun left_value right_value state ->
+      (last_val left_value state) ^ (last_val right_value state))
+  | "===" -> (fun left_value right_value state ->
+      if left_value = right_value then "true" else "fals")
+  | "====" -> (fun left_value right_value state ->
+      if (next_val left_value state) = (next_val right_value state) then "true" else "fals")
+  | "=====" -> (fun left_value right_value state ->
+      if (last_val left_value state) = (last_val right_value state) then "true" else "fals")
   | _ -> raise Interpret_no_op
 
 let rec interpret ast state =
