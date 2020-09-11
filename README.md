@@ -13,12 +13,12 @@ Implemented:
 - Interactive interpreter.
 - Assignment with = and ==
 - Operators "+", "++", "+++", "===", "====", "====="
+- Stacked assignment (A = B = C as A = B and B = C)
 
 Backlog:
 
 - Ternary ? :
 - Parenthesis
-- Stacked assignment (A = B = C as A = B and B = C)
 - Objects
 - Functions? (redefinition possible)
 
