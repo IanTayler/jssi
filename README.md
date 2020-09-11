@@ -14,10 +14,10 @@ Implemented:
 - Assignment with = and ==
 - Operators "+", "++", "+++", "===", "====", "====="
 - Stacked assignment (A = B = C as A = B and B = C)
+- Ternary ? :
 
 Backlog:
 
-- Ternary ? :
 - Parenthesis
 - Objects
 - Functions? (redefinition possible)

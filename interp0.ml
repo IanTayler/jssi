@@ -18,6 +18,8 @@ let string_to_token str =
   | "++" -> TTBinaryOp
   | "*" -> TTUnaryOp
   | "'" -> TTUnaryOp
+  | "?" -> TTBinaryOp
+  | ":" -> TTBinaryOp
   | _ -> TTString
 
 exception Separate_error
@@ -184,6 +186,10 @@ let op_func str =
       if (next_val left_value state) = (next_val right_value state) then "true" else "fals")
   | "=====" -> (fun left_value right_value state ->
       if (last_val left_value state) = (last_val right_value state) then "true" else "fals")
+  | "?" -> (fun left_value right_value state ->
+      if left_value = "fals" then "fals" else right_value)
+  | ":" -> (fun left_value right_value state ->
+      if left_value = "fals" then right_value else left_value)
   | _ -> raise Interpret_no_op
 
 let rec interpret ast state =
