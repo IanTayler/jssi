@@ -137,7 +137,7 @@ let rec backward_pass stack =
   match stack with
     hd :: (Leaf {cls=CLEmpty}) :: _ -> hd
   | hd :: snd :: tl ->
-      if List.mem (node_cls hd) [CLE; CLP] && (node_cls snd) = CLAL then
+      if List.mem (node_cls hd) [CLE; CLP; CLA] && (node_cls snd) = CLAL then
         backward_pass ((Node {cls=CLA; children=[snd; hd]}) :: tl)
       else
         raise Backward_error
@@ -206,13 +206,10 @@ let rec interpret ast state =
         match child_fst.children with
           _ :: Leaf {cls=CLOP; value=op_value} :: [] ->
             if op_value.str = "=" then
-              ("()", assign child_fst_value child_snd_value new_state_snd)
+              (child_fst_value, assign child_fst_value child_snd_value new_state_snd)
             else if op_value.str = "==" then
-              ("()", assign
-                (last_val child_fst_value new_state_snd)
-                child_snd_value
-                new_state_snd
-              )
+              let left_value = (last_val child_fst_value new_state_snd) in
+              (left_value, assign left_value child_snd_value new_state_snd)
             else raise Interpret_CLA_op_error
         | _ -> raise Interpret_CLA_children_error
       end
